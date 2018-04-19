@@ -1,0 +1,67 @@
+FROM ubuntu:xenial
+
+## Connection ports for controlling the UI:
+# VNC port:5901
+# noVNC webport, connect via http://IP:6901/?password=vncpassword
+ENV DISPLAY=:1 \
+    VNC_PORT=5901 \
+    NO_VNC_PORT=6901
+EXPOSE $VNC_PORT $NO_VNC_PORT
+
+ENV HOME=/home/user \
+    TERM=xterm \
+    STARTUPDIR=/home/user/.startup \
+    INST_SCRIPTS=/home/user/.install \
+    NO_VNC_HOME=/home/user/noVNC \
+    DEBIAN_FRONTEND=noninteractive \
+    VNC_COL_DEPTH=24 \
+    VNC_RESOLUTION=1500x700 \
+    VNC_PW=vncpassword \
+    VNC_VIEW_ONLY=false
+
+WORKDIR $HOME
+
+ENV bitsass "\e[36mBitsass\e[0m"
+
+# Basics baby...
+ADD setup/*.sh $INST_SCRIPTS/
+RUN find $INST_SCRIPTS -name '*.sh' -exec chmod a+x {} +
+RUN $INST_SCRIPTS/install_tools.sh
+ENV LANG='en_US.UTF-8' LANGUAGE='en_US:en' LC_ALL='en_US.UTF-8'
+RUN $INST_SCRIPTS/install_nettools.sh
+
+# Time for VNC.
+ADD vnc/install_vnc.sh $INST_SCRIPTS/
+ADD vnc/install_novnc.sh $INST_SCRIPTS/
+RUN find $INST_SCRIPTS -name '*.sh' -exec chmod a+x {} +
+RUN $INST_SCRIPTS/install_vnc.sh
+RUN $INST_SCRIPTS/install_novnc.sh
+
+# Install the browsers, and then start them up.
+ADD browser/*.sh $INST_SCRIPTS/
+RUN find $INST_SCRIPTS -name '*.sh' -exec chmod a+x {} +
+RUN $INST_SCRIPTS/install_firefox.sh
+RUN $INST_SCRIPTS/install_chrome.sh
+
+# Xfce
+ADD xfce/install_xfce4.sh $INST_SCRIPTS/
+RUN find $INST_SCRIPTS -name '*.sh' -exec chmod a+x {} +
+RUN $INST_SCRIPTS/install_xfce4.sh
+ADD xfce/src/ $HOME/
+
+# ENV USER servermanager
+ADD user/create_user.sh $INST_SCRIPTS/
+ADD user/user_permissions.sh $INST_SCRIPTS/
+ADD user/bash_user.sh $STARTUPDIR/
+RUN find $INST_SCRIPTS -name '*.sh' -exec chmod a+x {} +
+RUN find $STARTUPDIR -name '*.sh' -exec chmod a+x {} +
+RUN $INST_SCRIPTS/create_user.sh
+RUN $INST_SCRIPTS/user_permissions.sh $STARTUPDIR $HOME  
+
+ADD vnc/run_vnc.sh $STARTUPDIR/
+ADD browser/configure_chrome.sh $STARTUPDIR/
+
+USER 1000
+
+ENTRYPOINT ["/home/user/.startup/run_vnc.sh"]
+CMD ["--wait"]
